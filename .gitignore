@@ -130,7 +130,6 @@ dmypy.json
 # Custom
 data/
 .vscode/
-output/
 tmp/
 build/
 dist/

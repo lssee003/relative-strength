@@ -9,10 +9,12 @@ jobs:
   generate-rs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: write
 
     steps:
-      # ── 1. Checkout relative-strength ──────────────────────────────────────
-      - name: Checkout relative-strength repo
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       # ── 2. Python 3.11 ─────────────────────────────────────────────────────
@@ -37,63 +39,13 @@ jobs:
       - name: Run relative strength calculation
         run: python relative-strength.py true
 
-      # ── 5. Save ticker_info cache ───────────────────────────────────────────
-      - name: Save ticker_info cache
+      # ── 5. Commit ticker_info cache + output CSVs in-repo ──────────────────
+      - name: Commit and push results
         run: |
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
-          git add data_persist/ticker_info.json
-          git diff --staged --quiet || git commit -m "Update ticker_info cache $(date +'%Y-%m-%d')"
+          git add data_persist/ticker_info.json output/
+          git diff --staged --quiet || git commit -m "RS Ratings update $(date +'%Y-%m-%d')"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ── 6. Push CSVs to rs-log ──────────────────────────────────────────────
-      - name: Checkout rs-log repo
-        uses: actions/checkout@v4
-        with:
-          repository: Fred6725/rs-log
-          token: ${{ secrets.RS_LOG_TOKEN }}
-          path: rs-log
-
-      - name: Copy outputs to rs-log
-        run: |
-          cp output/rs_stocks.csv     rs-log/output/rs_stocks.csv
-          cp output/rs_stocks_1.csv   rs-log/output/rs_stocks_1.csv
-          cp output/rs_stocks_2.csv   rs-log/output/rs_stocks_2.csv
-          cp output/rs_industries.csv rs-log/output/rs_industries.csv
-          cp output/RSRATING.csv      rs-log/output/RSRATING.csv
-
-      - name: Commit and push to rs-log
-        working-directory: rs-log
-        run: |
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          git add output/
-          git diff --staged --quiet || git commit -m "RS Ratings update $(date +'%Y-%m-%d')"
-          git push
-
-      # ── 7. Push RSRATING.csv to TradingView Pine Seeds repo ─────────────────
-      # This triggers check_data.yaml in seed_fred6725_rs_rating,
-      # which validates the data and creates a PR → upload_data.yaml → TradingView
-      - name: Checkout seed_fred6725_rs_rating repo
-        uses: actions/checkout@v4
-        with:
-          repository: Fred6725/seed_fred6725_rs_rating
-          token: ${{ secrets.RS_LOG_TOKEN }}
-          path: seed-repo
-
-      - name: Copy RSRATING.csv to seed repo data folder
-        run: |
-          cp output/RSRATING.csv seed-repo/data/RSRATING.csv
-
-      - name: Commit and push to seed_fred6725_rs_rating
-        working-directory: seed-repo
-        run: |
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          git add data/RSRATING.csv
-          git diff --staged --quiet || git commit -m "RS Rating data update $(date +'%Y-%m-%d')"
-          git push
-        # This push triggers check_data.yaml in seed_fred6725_rs_rating
-        # which runs validation and creates a PR → upload_data.yaml sends to TradingView
