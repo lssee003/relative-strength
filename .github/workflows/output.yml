@@ -46,6 +46,7 @@ jobs:
           git config user.name "GitHub Action"
           git add data_persist/ticker_info.json output/
           git diff --staged --quiet || git commit -m "RS Ratings update $(date +'%Y-%m-%d')"
+          git pull --rebase origin main
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

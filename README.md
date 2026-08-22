@@ -1,128 +1,112 @@
-# RS Rating — IBD Style Relative Strength
+# RS Rating — IBD-Style Relative Strength
 
-> Fork of [Skyte](https://github.com/skyte/relative-strength)'s project, modified by [maximbelyayev](https://github.com/maximbelyayev/relative-strength), maintained by [Fred6725](https://github.com/Fred6725).  
+IBD-style Relative Strength percentile ranking (0–99) for ~6,000 US-listed stocks, recomputed every weekday via GitHub Actions and published as CSVs in this repo.
 
-IBD Style Relative Strength Percentile Ranking of Stocks (0-99 score).  
-TradingView indicator using this data: **https://www.tradingview.com/script/pziQwiT2/**
+> Self-hosted mirror of [Fred6725/relative-strength](https://github.com/Fred6725/relative-strength) (itself derived from [skyte/relative-strength](https://github.com/skyte/relative-strength) via [maximbelyayev](https://github.com/maximbelyayev/relative-strength)). Full credit to those authors for the methodology and pipeline. This mirror exists so the data source is under my control — the main consumer is my trading dashboard, which reads the raw CSV URLs below.
+
+**Differences from upstream:** output CSVs are committed directly into this repo (`output/`) instead of being pushed to a separate log repo, and the TradingView Pine Seeds publishing step is removed. The calculation itself is unchanged.
 
 ---
-# Buy Me A Coffee
-<a href="https://www.buymeacoffee.com/fred6725" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
----
 
-## Daily Generated Outputs
+## Daily Outputs
 
-Updated every weekday automatically via GitHub Actions (~16 min run, ~6100 tickers).
-
-### Browsable on GitHub (rendered as table)
+Generated every weekday at 23:30 UTC (after US market close), ~15–25 min per run.
 
 | File | Content |
 |------|---------|
-| [rs_stocks_1.csv](https://github.com/Fred6725/rs-log/blob/main/output/rs_stocks_1.csv) | Stocks — Percentile 50 to 99 (strongest) |
-| [rs_stocks_2.csv](https://github.com/Fred6725/rs-log/blob/main/output/rs_stocks_2.csv) | Stocks — Percentile 0 to 49 |
-| [rs_industries.csv](https://github.com/Fred6725/rs-log/blob/main/output/rs_industries.csv) | Industry rankings |
+| [`output/rs_stocks.csv`](output/rs_stocks.csv) | Full dataset — all ~6,000 stocks |
+| [`output/rs_stocks_1.csv`](output/rs_stocks_1.csv) | Percentile 50–99 (strongest half, renders on GitHub) |
+| [`output/rs_stocks_2.csv`](output/rs_stocks_2.csv) | Percentile 0–49 |
+| [`output/rs_industries.csv`](output/rs_industries.csv) | Industry-level rankings with constituent tickers |
+| [`output/RSRATING.csv`](output/RSRATING.csv) | Percentile threshold series (TradingView seed format) |
 
-### Full dataset (download / Google Sheets)
+### Raw URLs (for programmatic use / Google Sheets)
 
-| File | Content |
-|------|---------|
-| [rs_stocks.csv](https://github.com/Fred6725/rs-log/blob/main/output/rs_stocks.csv) | All ~6100 stocks in one file |
+```
+https://raw.githubusercontent.com/lssee003/relative-strength/main/output/rs_stocks.csv
+https://raw.githubusercontent.com/lssee003/relative-strength/main/output/rs_industries.csv
+```
+
+Google Sheets — paste in `A1`:
+
+```
+=IMPORTDATA("https://raw.githubusercontent.com/lssee003/relative-strength/main/output/rs_stocks.csv",",",0)
+```
 
 ---
 
-## Using with Google Sheets
+## Methodology
 
-The easiest way to filter, sort, and scan the full dataset.  
-Use the **raw** GitHub URLs with `IMPORTDATA()` — no login required, auto-refreshes on open.
-
-### Full dataset in one sheet
-
-Paste this in cell `A1`:
 ```
-=IMPORTDATA("https://raw.githubusercontent.com/Fred6725/rs-log/main/output/rs_stocks.csv",",",0)
+RS Score (stock) = 40% × P3 + 20% × P6 + 20% × P9 + 20% × P12
+RS Score (SPY)   = 40% × P3 + 20% × P6 + 20% × P9 + 20% × P12
+Final RS         = (1 + RS Score stock) / (1 + RS Score SPY) × 100
 ```
 
-### What you can filter on
+`P3` = cumulative return over the trailing 3 months (63 trading days), `P6`/`P9`/`P12` likewise. The windows overlap, so the most recent quarter effectively carries the heaviest weight. Final RS values are then percentile-ranked cross-sectionally across the whole universe into a 0–99 score (99 = strongest).
 
-Once imported, use standard Google Sheets filters or `QUERY()` to slice by:
-- **Sector / Industry** — find the strongest stocks in a given sector
-- **Percentile** — focus on RS ≥ 90 for IBD-style momentum screens
-- **MarketCap** — filter by large/mid/small cap
-- **Float** — identify low-float momentum candidates
-- **AvgVol50** — filter by liquidity (IBD standard: 50-day average volume)
-- **ShortFloatPct** — spot heavily shorted stocks (note: updated 2x/month by Yahoo)
-- **PctFrom52WkHigh** — find stocks near their highs vs. extended ones
+The `1M/3M/6M_RS_Percentile` columns recompute the score with the price series truncated 1/3/6 months back, ranked against today's cohort — useful for spotting improving vs. deteriorating momentum.
+
+**Universe:** all common stocks from [nasdaqtrader.com](https://www.nasdaqtrader.com/dynamic/symdir/nasdaqtraded.txt) (ETFs and test issues excluded; ~6,000 names across NYSE, NASDAQ, NYSE ARCA, BATS, AMEX). Requires ≥120 trading days of history, so recent IPOs are excluded. Benchmark: SPY.
+
+**Industry rankings** (`rs_industries.csv`): mean RS of member stocks per industry (industries with ≥2 members), percentile-ranked; `Tickers` column lists members sorted strongest-first.
 
 ---
 
-## Output Columns
+## Output Columns (`rs_stocks.csv`)
 
 | Column | Description | Source |
 |--------|-------------|--------|
 | Rank | Overall rank (1 = strongest) | Calculated |
 | Ticker | Stock symbol | NASDAQ list |
-| Sector | GICS Sector | Yahoo Finance |
-| Industry | GICS Sub-Industry | Yahoo Finance |
+| Sector | Sector (Yahoo taxonomy, 11 sectors) | Yahoo Finance |
+| Industry | Industry (Yahoo taxonomy, ~145 industries) | Yahoo Finance |
 | Exchange | NYSE / NASDAQ / etc. | NASDAQ list |
 | Relative Strength | Raw RS score | Calculated |
 | Percentile | 0–99 percentile rank | Calculated |
-| 1M/3M/6M_RS_Percentile | RS percentile 1, 3, 6 months ago | Calculated |
-| Price | Last closing price | Yahoo Finance |
+| 1M/3M/6M_RS_Percentile | RS percentile 1/3/6 months ago | Calculated |
+| Price | Last close | Yahoo Finance |
 | MarketCap | Market capitalisation | Yahoo Finance |
 | Float | Float shares | Yahoo Finance |
-| ShortFloatPct | Short % of float (2x/month) | Yahoo Finance |
-| 52WkHigh / 52WkLow | 52-week high and low | Yahoo Finance |
-| PctFrom52WkHigh | % distance from 52-week high | Calculated |
-| AvgVol10/30/50/60 | Average volume over 10/30/50/60 days | Calculated |
+| ShortFloatPct | Short % of float (Yahoo updates ~2×/month) | Yahoo Finance |
+| PctFrom52WkHigh | % distance from 52-week high (negative = below) | Calculated |
+| AvgVol10/30/50 | Average daily volume over 10/30/50 days | Calculated |
+| RevenueGrowth | Most recent YoY revenue growth | Yahoo Finance |
+
+Note: Sector/Industry are Yahoo Finance's own classification, not GICS — thematic groupings (e.g. cybersecurity, AI) don't exist as industries here.
 
 ---
 
-## Calculation
+## Automation
 
-```
-RS Score (stock) = 40% × P3 + 20% × P6 + 20% × P9 + 20% × P12
-RS Score (SPY)   = 40% × P3 + 20% × P6 + 20% × P9 + 20% × P12
-Final RS = (1 + RS Score stock) / (1 + RS Score SPY)
-```
+Two workflows, both also runnable manually via `workflow_dispatch`:
 
-Where P3 = performance over the last 3 months (63 trading days), etc.  
-All stocks are then ranked and assigned a percentile from 99 (strongest) to 0 (weakest).
+- **`output.yml` — Generate RS Ratings**: weekdays 23:30 UTC. Downloads 18 months of daily candles for the full universe (batched `yfinance`), computes rankings, commits `output/*.csv` and the `data_persist/ticker_info.json` metadata cache.
+- **`update_stocks.yml` — Weekly ticker info refresh**: Sundays 00:00 UTC. Refreshes sector/industry/market-cap metadata for the whole universe.
+
+The daily commits keep GitHub's 60-day scheduled-workflow inactivity timer permanently reset.
 
 ---
 
-## Considered Stocks
+## Known Issues (inherited from upstream)
 
-All tickers from [nasdaqtrader.com](https://www.nasdaqtrader.com/dynamic/symdir/nasdaqtraded.txt), excluding ETFs and test issues (~6100 stocks across NYSE, NASDAQ, NYSE ARCA, BATS).
-
----
-
-## Known Issues
-
-- Close prices from Yahoo Finance are not always split-adjusted. If a stock had a recent split, its RS value may be temporarily off.
-- Short interest (`ShortFloatPct`) is updated by Yahoo Finance twice a month — may lag other sources like Finviz.
-- `Float` may be missing for some small-cap stocks.
-- Occasionally 1–2 tickers per run are skipped due to Yahoo rate limiting. No meaningful impact on percentile distribution.
+- Yahoo close prices occasionally miss a very recent split — affected tickers' RS may be temporarily off.
+- `ShortFloatPct` lags sources like Finviz (Yahoo updates it ~2×/month).
+- `Float` is missing for some small caps.
+- A handful of tickers per run may be skipped due to Yahoo rate limiting; no meaningful impact on the percentile distribution.
+- Percentiles rank against *all* listed stocks, so the top buckets include illiquid micro-caps — filter by `MarketCap` / `AvgVol50` for tradable screens.
 
 ---
 
-## How To Run (Python Script)
+## Running Locally
 
-### Requirements
-- Python 3.10 or higher (3.11 recommended)
+Python 3.10+ (3.11 recommended):
 
 ```bash
-git clone https://github.com/Fred6725/relative-strength.git
+git clone https://github.com/lssee003/relative-strength.git
 cd relative-strength
 pip install -r requirements.txt
 python relative-strength.py true
 ```
 
-Output files will be in the `output/` folder.
-
----
-
-## Support the Project
-
-If this is useful to you, consider buying me a coffee ☕
-
-<a href="https://www.buymeacoffee.com/fred6725" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+Outputs land in `output/`. Config knobs (universe, benchmark, min percentile) are in `config.yaml`.
